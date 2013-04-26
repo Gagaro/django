@@ -50,11 +50,15 @@ class BlockNode(Node):
         return "<Block Node: %s. Contents: %r>" % (self.name, self.nodelist)
 
     def render(self, context):
+        return ''.join(self.stream(context))
+
+    def stream(self, context):
         block_context = context.render_context.get(BLOCK_CONTEXT_KEY)
         with context.push():
             if block_context is None:
                 context['block'] = self
-                result = self.nodelist.render(context)
+                for chunk in self.nodelist.stream(context):
+                    yield chunk
             else:
                 push = block = block_context.pop(self.name)
                 if block is None:
@@ -63,10 +67,10 @@ class BlockNode(Node):
                 block = type(self)(block.name, block.nodelist)
                 block.context = context
                 context['block'] = block
-                result = block.nodelist.render(context)
+                for chunk in self.nodelist.stream(context):
+                    yield chunk
                 if push is not None:
                     block_context.push(self.name, push)
-        return result
 
     def super(self):
         if not hasattr(self, 'context'):
@@ -145,6 +149,9 @@ class ExtendsNode(Node):
         return self.find_template(parent, context)
 
     def render(self, context):
+        return ''.join(self.stream(context))
+
+    def stream(self, context):
         compiled_parent = self.get_parent(context)
 
         if BLOCK_CONTEXT_KEY not in context.render_context:
@@ -165,9 +172,9 @@ class ExtendsNode(Node):
                     block_context.add_blocks(blocks)
                 break
 
-        # Call Template._render explicitly so the parser context stays
+        # Call Template._stream explicitly so the parser context stays
         # the same.
-        return compiled_parent._render(context)
+        return compiled_parent._stream(context)
 
 
 class IncludeNode(Node):
@@ -178,6 +185,9 @@ class IncludeNode(Node):
         super(IncludeNode, self).__init__(*args, **kwargs)
 
     def render(self, context):
+        return ''.join(self.stream(context))
+
+    def stream(self, context):
         try:
             template = self.template.resolve(context)
             # Does this quack like a Template?
@@ -189,13 +199,16 @@ class IncludeNode(Node):
                 for name, var in six.iteritems(self.extra_context)
             }
             if self.isolated_context:
-                return template.render(context.new(values))
-            with context.push(**values):
-                return template.render(context)
+                for chunk in template.stream(context.new(values)):
+                    yield chunk
+            else:
+                with context.push(**values):
+                    for chunk in template.stream(context.new(values)):
+                        yield chunk
         except Exception:
             if context.template.engine.debug:
                 raise
-            return ''
+            yield ''
 
 
 @register.tag('block')

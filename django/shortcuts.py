@@ -11,7 +11,7 @@ from django.db.models.base import ModelBase
 from django.db.models.manager import Manager
 from django.db.models.query import QuerySet
 from django.http import (
-    Http404, HttpResponse, HttpResponsePermanentRedirect, HttpResponseRedirect,
+    Http404, HttpResponse, HttpResponsePermanentRedirect, HttpResponseRedirect, StreamingHttpResponse
 )
 from django.template import RequestContext, loader
 from django.template.context import _current_app_undefined
@@ -24,37 +24,52 @@ from django.utils.encoding import force_text
 from django.utils.functional import Promise
 
 
-def render_to_response(template_name, context=None,
+def http_response_using(func, template_name, context=None,
                        context_instance=_context_instance_undefined,
                        content_type=None, status=None, dirs=_dirs_undefined,
                        dictionary=_dictionary_undefined, using=None):
     """
     Returns a HttpResponse whose content is filled with the result of calling
-    django.template.loader.render_to_string() with the passed arguments.
+    func() with the passed arguments.
     """
     if (context_instance is _context_instance_undefined
             and dirs is _dirs_undefined
             and dictionary is _dictionary_undefined):
         # No deprecated arguments were passed - use the new code path
-        content = loader.render_to_string(template_name, context, using=using)
+        content = func(template_name, context, using=using)
 
     else:
         # Some deprecated arguments were passed - use the legacy code path
-        content = loader.render_to_string(
+        content = func(
             template_name, context, context_instance, dirs, dictionary,
             using=using)
 
     return HttpResponse(content, content_type, status)
 
+def render_to_response(*args, **kwargs):
+    """
+    Returns a HttpResponse whose content is filled with the result of calling
+    django.template.loader.render_to_string() with the passed arguments.
+    """
+    return http_response_using(loader.render_to_string, *args, **kwargs)
 
-def render(request, template_name, context=None,
+
+def stream_to_response(*args, **kwargs):
+    """
+    Returns a HttpResponse whose content is filled with the result of calling
+    django.template.loader.stream() with the passed arguments.
+    """
+    return http_response_using(loader.stream, *args, **kwargs)
+
+
+def request_context_response_using(func, request, template_name, context=None,
            context_instance=_context_instance_undefined,
            content_type=None, status=None, current_app=_current_app_undefined,
            dirs=_dirs_undefined, dictionary=_dictionary_undefined,
            using=None):
     """
     Returns a HttpResponse whose content is filled with the result of calling
-    django.template.loader.render_to_string() with the passed arguments.
+    func() with the passed arguments.
     Uses a RequestContext by default.
     """
     if (context_instance is _context_instance_undefined
@@ -63,7 +78,7 @@ def render(request, template_name, context=None,
             and dictionary is _dictionary_undefined):
         # No deprecated arguments were passed - use the new code path
         # In Django 2.0, request should become a positional argument.
-        content = loader.render_to_string(
+        content = func(
             template_name, context, request=request, using=using)
 
     else:
@@ -84,11 +99,28 @@ def render(request, template_name, context=None,
                 # warning in RequestContext.__init__.
                 context_instance._current_app = current_app
 
-        content = loader.render_to_string(
+        content = func(
             template_name, context, context_instance, dirs, dictionary,
             using=using)
 
     return HttpResponse(content, content_type, status)
+
+
+def render(request, *args, **kwargs):
+    """
+    Returns a HttpResponse whose content is filled with the result of calling
+    django.template.loader.render_to_string() with the passed arguments.
+    Uses a RequestContext by default.
+    """
+    return request_context_response_using(loader.render_to_string, request, *args, **kwargs)
+
+def stream(request, *args, **kwargs):
+    """
+    Returns a HttpResponse whose content is filled with the result of calling
+    django.template.loader.stream() with the passed arguments.
+    Uses a RequestContext by default.
+    """
+    return request_context_response_using(loader.stream, request, *args, **kwargs)
 
 
 def redirect(to, *args, **kwargs):

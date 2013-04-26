@@ -6,7 +6,7 @@ from functools import update_wrapper
 from django import http
 from django.core.exceptions import ImproperlyConfigured
 from django.core.urlresolvers import NoReverseMatch, reverse
-from django.template.response import TemplateResponse
+from django.template.response import TemplateResponse, StreamingTemplateResponse
 from django.utils import six
 from django.utils.decorators import classonlymethod
 
@@ -157,6 +157,8 @@ class TemplateView(TemplateResponseMixin, ContextMixin, View):
         context = self.get_context_data(**kwargs)
         return self.render_to_response(context)
 
+class StreamingTemplateView(TemplateView):
+    response_class = StreamingTemplateResponse
 
 class RedirectView(View):
     """

@@ -1,6 +1,6 @@
 import warnings
 
-from django.http import HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 from django.utils import six
 from django.utils.deprecation import RemovedInDjango20Warning
 
@@ -14,11 +14,14 @@ class ContentNotRenderedError(Exception):
     pass
 
 
-class SimpleTemplateResponse(HttpResponse):
-    rendering_attrs = ['template_name', 'context_data', '_post_render_callbacks']
+class AbstractTemplateResponse(object):
+    """ 
+    An abstract base type allowing subclasses to implement either rendering 
+    or streaming of content
+    """
+    rendering_attrs = ['template_name', 'context_data']
 
-    def __init__(self, template, context=None, content_type=None, status=None,
-                 charset=None, using=None):
+    def __init__(self, template, context=None, content_type=None, status=None, charset=None, using=None):
         if isinstance(template, Template):
             warnings.warn(
                 "{}'s template argument cannot be a django.template.Template "
@@ -26,29 +29,38 @@ class SimpleTemplateResponse(HttpResponse):
                 "created by get_template().".format(self.__class__.__name__),
                 RemovedInDjango20Warning, stacklevel=2)
             template = BackendTemplate(template)
-
         # It would seem obvious to call these next two members 'template' and
         # 'context', but those names are reserved as part of the test Client
         # API. To avoid the name collision, we use different names.
         self.template_name = template
         self.context_data = context
 
-        self.using = using
-
-        self._post_render_callbacks = []
-
-        # _request stores the current request object in subclasses that know
-        # about requests, like TemplateResponse. It's defined in the base class
-        # to minimize code duplication.
-        # It's called self._request because self.request gets overwritten by
-        # django.test.client.Client. Unlike template_name and context_data,
-        # _request should not be considered part of the public API.
-        self._request = None
-
         # content argument doesn't make sense here because it will be replaced
         # with rendered template so we always pass empty string in order to
         # prevent errors and provide shorter signature.
-        super(SimpleTemplateResponse, self).__init__('', content_type, status, charset)
+        super(AbstractTemplateResponse, self).__init__('', content_type, status, charset)
+
+    def resolve_template(self, template):
+        "Accepts a template object, path-to-template or list of paths"
+        if isinstance(template, (list, tuple)):
+            return select_template(template, using=self.using)
+        elif isinstance(template, six.string_types):
+            return get_template(template, using=self.using)
+        else:
+            return template
+
+    def resolve_context(self, context):
+        return context
+
+
+class SimpleTemplateResponse(AbstractTemplateResponse, HttpResponse):
+    rendering_attrs = AbstractTemplateResponse.rendering_attrs + \
+        ['_post_render_callbacks']
+
+    def __init__(self, template, context=None, content_type=None, status=None, charset=None, using=None):
+        self._post_render_callbacks = []
+        super(SimpleTemplateResponse, self).__init__(template, context,
+            content_type, status, charset, using)
 
         # _is_rendered tracks whether the template and context has been baked
         # into a final response.
@@ -74,15 +86,6 @@ class SimpleTemplateResponse(HttpResponse):
 
         return obj_dict
 
-    def resolve_template(self, template):
-        "Accepts a template object, path-to-template or list of paths"
-        if isinstance(template, (list, tuple)):
-            return select_template(template, using=self.using)
-        elif isinstance(template, six.string_types):
-            return get_template(template, using=self.using)
-        else:
-            return template
-
     def _resolve_template(self, template):
         # This wrapper deprecates returning a django.template.Template in
         # subclasses that override resolve_template. It can be removed in
@@ -97,9 +100,6 @@ class SimpleTemplateResponse(HttpResponse):
                 RemovedInDjango20Warning, stacklevel=2)
             new_template = BackendTemplate(new_template)
         return new_template
-
-    def resolve_context(self, context):
-        return context
 
     def _resolve_context(self, context):
         # This wrapper deprecates returning a Context or a RequestContext in
@@ -189,8 +189,9 @@ class SimpleTemplateResponse(HttpResponse):
         self._is_rendered = True
 
 
-class TemplateResponse(SimpleTemplateResponse):
-    rendering_attrs = SimpleTemplateResponse.rendering_attrs + ['_request', '_current_app']
+class RequestContextMixin(object):
+    rendering_attrs = SimpleTemplateResponse.rendering_attrs + \
+        ['_request', '_current_app']
 
     def __init__(self, request, template, context=None, content_type=None,
             status=None, current_app=_current_app_undefined, charset=None,
@@ -206,3 +207,28 @@ class TemplateResponse(SimpleTemplateResponse):
         super(TemplateResponse, self).__init__(
             template, context, content_type, status, charset, using)
         self._request = request
+
+
+class TemplateResponse(RequestContextMixin, SimpleTemplateResponse):
+    pass
+
+
+class SimpleStreamingTemplateResponse(AbstractTemplateResponse, StreamingHttpResponse):
+    @property
+    def streaming_content(self):
+        """Returns a generator for the content given the template and context
+        described by the TemplateResponse.
+
+        """
+        template = self.resolve_template(self.template_name)
+        context = self.resolve_context(self.context_data)
+        streaming_content = template.stream(context)
+        return streaming_content
+
+    @streaming_content.setter
+    def streaming_content(self, value):
+        self._iterator = iter(value)
+
+
+class StreamingTemplateResponse(RequestContextMixin, SimpleStreamingTemplateResponse):
+    pass

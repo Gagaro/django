@@ -202,6 +202,26 @@ class Template(object):
                 return self._render(context)
         finally:
             context.render_context.pop()
+            
+    def _stream(self, context):
+        "Wraps the generator"
+        context.render_context.push()
+        try:
+            if context.template is None:
+                with context.bind_template(self):
+                    context.template_name = self.name
+                    for chunk in self.nodelist.stream(context):
+                        yield chunk
+            else:
+                for chunk in self.nodelist.stream(context):
+                    yield chunk
+            
+        finally:
+            context.render_context.pop()
+
+    def stream(self, context):
+        "Display stage -- can be called many times"
+        return self._stream(context)
 
     def compile_nodelist(self):
         """
@@ -913,7 +933,7 @@ class Node(object):
         Return the node rendered as a string.
         """
         pass
-
+    
     def render_annotated(self, context):
         """
         Render the node. If debug is True and an exception occurs during
@@ -927,6 +947,21 @@ class Node(object):
             if context.template.engine.debug and not hasattr(e, 'template_debug'):
                 e.template_debug = context.template.get_exception_info(e, self.token)
             raise
+        
+    def stream(self, context):
+        """
+        Return a generator that progressively renders the node.
+        """
+        yield self.render(context)
+        
+    def stream_annotated(self, context):
+        """
+        Return a generator that progressively renders the node. If debug is True and an exception occurs during
+        rendering, the exception is annotated with contextual line information
+        where it occurred in the template. For internal usage this method is
+        preferred over using the render method directly.
+        """
+        yield self.render_annotated(context)
 
     def __iter__(self):
         yield self
@@ -952,14 +987,20 @@ class NodeList(list):
     contains_nontext = False
 
     def render(self, context):
-        bits = []
+        return mark_safe(''.join(self.stream(context)))
+
+    def stream(self, context):
         for node in self:
-            if isinstance(node, Node):
-                bit = node.render_annotated(context)
-            else:
-                bit = node
-            bits.append(force_text(bit))
-        return mark_safe(''.join(bits))
+            try:
+                if isinstance(node, Node):
+                    for bit in node.stream_annotated(context):
+                        yield mark_safe(force_text(bit))
+                else:
+                    yield mark_safe(force_text(node))
+            except Exception as e:
+                if not hasattr(e, 'django_template_source') and hasattr(node, 'source'):
+                    e.django_template_source = node.source
+                raise
 
     def get_nodes_by_type(self, nodetype):
         "Return a list of all nodes of the given type"
@@ -967,7 +1008,6 @@ class NodeList(list):
         for node in self:
             nodes.extend(node.get_nodes_by_type(nodetype))
         return nodes
-
 
 class TextNode(Node):
     def __init__(self, s):

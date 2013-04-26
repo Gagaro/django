@@ -5,7 +5,7 @@ from django.conf.urls import url
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import cache_page
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, StreamingTemplateView
 
 from . import models, views
 
@@ -24,6 +24,16 @@ urlpatterns = [
 
     url(r'^template/cached/(?P<foo>\w+)/$',
         cache_page(2.0)(TemplateView.as_view(template_name='generic_views/about.html'))),
+
+    # StreamingTemplateView
+    (r'^template/streaming/no_template/$',
+        StreamingTemplateView.as_view()),
+    (r'^template/streaming/simple/(?P<foo>\w+)/$',
+        StreamingTemplateView.as_view(template_name='generic_views/about.html')),
+    (r'^template/streaming/custom/(?P<foo>\w+)/$',
+        views.CustomStreamingTemplateView.as_view(template_name='generic_views/about.html')),
+    (r'^template/streaming/content_type/$',
+        StreamingTemplateView.as_view(template_name='generic_views/robots.txt', content_type='text/plain')),
 
     # DetailView
     url(r'^detail/obj/$',
