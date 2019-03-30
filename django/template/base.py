@@ -51,6 +51,9 @@ times with multiple contexts)
 
 from __future__ import unicode_literals
 
+from contextlib import contextmanager
+import inspect
+import logging
 import re
 
 from django.template.context import (# NOQA: imported for backwards compatibility
@@ -74,10 +77,6 @@ from django.utils.text import (
 )
 from django.utils.timezone import template_localtime
 from django.utils.translation import pgettext_lazy, ugettext_lazy
-
-from contextlib import contextmanager
-import inspect
-import logging
 
 from .exceptions import TemplateSyntaxError
 
@@ -993,8 +992,9 @@ class Node(object):
         directly.
         """
         with annotate_exception(context, self.token):
-            for chunk in self.stream(context):
-                yield chunk
+            yield from self.stream(context)
+#             for chunk in self.stream(context):
+#                 yield chunk
 
     def __iter__(self):
         yield self
