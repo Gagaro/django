@@ -51,12 +51,12 @@ times with multiple contexts)
 
 from __future__ import unicode_literals
 
+from contextlib import contextmanager
 import inspect
 import logging
 import re
-from contextlib import contextmanager
 
-from django.template.context import (  # NOQA: imported for backwards compatibility
+from django.template.context import (# NOQA: imported for backwards compatibility
     BaseContext, Context, ContextPopException, RequestContext,
 )
 from django.utils import six
@@ -135,6 +135,7 @@ class VariableDoesNotExist(Exception):
 
 
 class Origin(object):
+
     def __init__(self, name, template_name=None, loader=None):
         self.name = name
         self.template_name = template_name
@@ -169,6 +170,7 @@ class StringOrigin(six.with_metaclass(DeprecationInstanceCheck, Origin)):
 
 
 class Template(object):
+
     def __init__(self, template_string, origin=None, name=None, engine=None):
         try:
             template_string = force_text(template_string)
@@ -339,6 +341,7 @@ def linebreak_iter(template_source):
 
 
 class Token(object):
+
     def __init__(self, token_type, contents, position=None, lineno=None):
         """
         A token representing a string from the template.
@@ -384,6 +387,7 @@ class Token(object):
 
 
 class Lexer(object):
+
     def __init__(self, template_string):
         self.template_string = template_string
         self.verbatim = False
@@ -434,6 +438,7 @@ class Lexer(object):
 
 
 class DebugLexer(Lexer):
+
     def tokenize(self):
         """
         Split a template string into tokens and annotates each token with its
@@ -461,6 +466,7 @@ class DebugLexer(Lexer):
 
 
 class Parser(object):
+
     def __init__(self, tokens, libraries=None, builtins=None):
         self.tokens = tokens
         self.tags = {}
@@ -672,6 +678,7 @@ class FilterExpression(object):
         >>> fe.var
         <Variable: 'variable'>
     """
+
     def __init__(self, token, parser):
         self.token = token
         matches = filter_re.finditer(token)
@@ -771,6 +778,7 @@ class FilterExpression(object):
                                       (name, alen - dlen, plen))
 
         return True
+
     args_check = staticmethod(args_check)
 
     def __str__(self):
@@ -898,7 +906,7 @@ class Variable(object):
                             current = current[int(bit)]
                         except (IndexError,  # list index out of range
                                 ValueError,  # invalid literal for int()
-                                KeyError,    # current is a dict without `int(bit)` key
+                                KeyError,  # current is a dict without `int(bit)` key
                                 TypeError):  # unsubscriptable object
                             raise VariableDoesNotExist("Failed lookup for key "
                                                        "[%s] in %r",
@@ -984,8 +992,9 @@ class Node(object):
         directly.
         """
         with annotate_exception(context, self.token):
-            for chunk in self.stream(context):
-                yield chunk
+            yield from self.stream(context)
+#             for chunk in self.stream(context):
+#                 yield chunk
 
     def __iter__(self):
         yield self
@@ -1019,9 +1028,9 @@ class NodeList(list):
         for node in self:
             if isinstance(node, Node):
                 for bit in node.stream_annotated(context):
-                    yield mark_safe(force_text(bit))
+                    yield force_text(bit)
             else:
-                yield mark_safe(force_text(node))
+                yield force_text(node)
 
     def get_nodes_by_type(self, nodetype):
         "Return a list of all nodes of the given type"
@@ -1032,6 +1041,7 @@ class NodeList(list):
 
 
 class TextNode(Node):
+
     def __init__(self, s):
         self.s = s
 
@@ -1060,6 +1070,7 @@ def render_value_in_context(value, context):
 
 
 class VariableNode(Node):
+
     def __init__(self, filter_expression):
         self.filter_expression = filter_expression
 

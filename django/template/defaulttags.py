@@ -1,11 +1,11 @@
 """Default tags used by the template system, available to all templates."""
 from __future__ import unicode_literals
 
+from datetime import datetime
+from itertools import cycle as itertools_cycle, groupby
 import re
 import sys
 import warnings
-from datetime import datetime
-from itertools import cycle as itertools_cycle, groupby
 
 from django.conf import settings
 from django.utils import six, timezone
@@ -30,6 +30,7 @@ register = Library()
 
 class AutoEscapeControlNode(Node):
     """Implements the actions of the autoescape tag."""
+
     def __init__(self, setting, nodelist):
         self.setting, self.nodelist = setting, nodelist
 
@@ -45,18 +46,20 @@ class AutoEscapeControlNode(Node):
         context.autoescape = self.setting
         for chunk in self.nodelist.render(context, stream=True):
             if self.setting:
-                yield mark_safe(chunk)
+                yield chunk
             else:
                 yield chunk
         context.autoescape = old_setting
 
 
 class CommentNode(Node):
+
     def render(self, context):
         return ''
 
 
 class CsrfTokenNode(Node):
+
     def render(self, context):
         csrf_token = context.get('csrf_token')
         if csrf_token:
@@ -77,6 +80,7 @@ class CsrfTokenNode(Node):
 
 
 class CycleNode(Node):
+
     def __init__(self, cyclevars, variable_name=None, silent=False):
         self.cyclevars = cyclevars
         self.variable_name = variable_name
@@ -96,6 +100,7 @@ class CycleNode(Node):
 
 
 class DebugNode(Node):
+
     def render(self, context):
         from pprint import pformat
         output = [force_text(pformat(val)) for val in context]
@@ -105,6 +110,7 @@ class DebugNode(Node):
 
 
 class FilterNode(Node):
+
     def __init__(self, filter_expr, nodelist):
         self.filter_expr, self.nodelist = filter_expr, nodelist
 
@@ -119,6 +125,7 @@ class FilterNode(Node):
 
 
 class FirstOfNode(Node):
+
     def __init__(self, variables, asvar=None):
         self.vars = variables
         self.asvar = asvar
@@ -341,12 +348,12 @@ class IfNode(Node):
     def stream(self, context):
         for condition, nodelist in self.conditions_nodelists:
 
-            if condition is not None:           # if / elif clause
+            if condition is not None:  # if / elif clause
                 try:
                     match = condition.eval(context)
                 except VariableDoesNotExist:
                     match = None
-            else:                               # else clause
+            else:  # else clause
                 match = True
 
             if match:
@@ -356,6 +363,7 @@ class IfNode(Node):
 
 
 class LoremNode(Node):
+
     def __init__(self, count, method, common):
         self.count, self.method, self.common = count, method, common
 
@@ -374,6 +382,7 @@ class LoremNode(Node):
 
 
 class RegroupNode(Node):
+
     def __init__(self, target, expression, var_name):
         self.target, self.expression = target, expression
         self.var_name = var_name
@@ -401,11 +410,13 @@ class RegroupNode(Node):
 
 
 class LoadNode(Node):
+
     def render(self, context):
         return ''
 
 
 class NowNode(Node):
+
     def __init__(self, format_string, asvar=None):
         self.format_string = format_string
         self.asvar = asvar
@@ -422,6 +433,7 @@ class NowNode(Node):
 
 
 class SpacelessNode(Node):
+
     def __init__(self, nodelist):
         self.nodelist = nodelist
 
@@ -453,6 +465,7 @@ class TemplateTagNode(Node):
 
 
 class URLNode(Node):
+
     def __init__(self, view_name, args, kwargs, asvar):
         self.view_name = view_name
         self.args = args
@@ -493,6 +506,7 @@ class URLNode(Node):
 
 
 class VerbatimNode(Node):
+
     def __init__(self, content):
         self.content = content
 
@@ -501,6 +515,7 @@ class VerbatimNode(Node):
 
 
 class WidthRatioNode(Node):
+
     def __init__(self, val_expr, max_expr, max_width, asvar=None):
         self.val_expr = val_expr
         self.max_expr = max_expr
@@ -534,6 +549,7 @@ class WidthRatioNode(Node):
 
 
 class WithNode(Node):
+
     def __init__(self, var, name, nodelist, extra_context=None):
         self.nodelist = nodelist
         # var and name are legacy attributes, being left in case they are used
@@ -903,6 +919,7 @@ def ifnotequal(parser, token):
 
 
 class TemplateLiteral(Literal):
+
     def __init__(self, value, text):
         self.value = value
         self.text = text  # for better error messages
